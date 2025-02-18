@@ -15,12 +15,6 @@ MONGO_URI = "mongodb://mongo:27017"
 mongo_client = MongoClient(MONGO_URI)
 mongo = mongo_client["mi_basedatos"]  # Nombre de la base de datos
 
-# Configuración de Neo4j
-NEO4J_URI = "bolt://neo4j:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "your_password"
-neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-
 # Configuración de Redis
 REDIS_HOST = "redis"
 REDIS_PORT = 6379

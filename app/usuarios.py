@@ -114,7 +114,7 @@ async def post_new_user(user: UserInDb):
         user.password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt())
         user_dict = user.dict()
         user_dict["date"] = datetime.today()
-        user_dict["active"] = False
+        user_dict["active"] = True
         user_dict["categorization"] = "LOW"
         data = collection.find_one({"user_name": user.user_name})
         if data:
