@@ -34,20 +34,18 @@ ActualizarProducto [PRODUCTO]
 ESTRCUTURAS:
 
 CREATE TABLE user_activity_log (
-log_id UUID,
 user_id TEXT, -- Identificador único del usuario
 event_time TIMESTAMP, -- Hora del evento
 event_type TEXT, -- Tipo de evento (ej. "eliminar producto", "realizar compra", etc.)
 carrito TEXT,  
- PRIMARY KEY (logID, event_time)
+ PRIMARY KEY (user_id, event_time)
 ) WITH CLUSTERING ORDER BY (event_time DESC);
 
 CREATE TABLE stock_activity_log (
-log_id UUID,
 user_id TEXT,
 product_id TEXT, -- Identificador único del producto
 event_time TIMESTAMP, -- Hora del evento
 event_type TEXT, -- Tipo de evento (ej. "agregar producto", "quitar producto")
 producto TEXT, -- JSON CON LOS DATOS DEL PRODUCTO ANTES DE SER REALIZADA LA ACCIÓN
-PRIMARY KEY (log_id, event_time)
+PRIMARY KEY (product_id, event_time)
 ) WITH CLUSTERING ORDER BY (event_time DESC);
