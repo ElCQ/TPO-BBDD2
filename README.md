@@ -32,7 +32,7 @@
 
 15. PRODUCTO Eliminar Producto: A partir de un idProducto, eliminar el producto. Guardar Log
 
-16. PRODUCTO LogProductos: Devuelve lista de actividades de producto asociadas a la tabla de actividades de producto.
+16. PRODUCTO LogProductos: Devuelve lista de actividades de producto asociadas a la tabla de actividades de producto. Se debe poder buscar por idproducto, fecha desde/hasta y por userid.
 
 log in [USER]
 log out [USER]

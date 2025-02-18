@@ -6,6 +6,7 @@ from cassandra.cluster import Cluster
 import uuid
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from fastapi import APIRouter, HTTPException, Depends, status
 
 load_dotenv()
 
@@ -68,3 +69,27 @@ def user_activity_log(user_id, evento, carrito):
     except Exception as e:
         print(f"Error logeo de usario: {e}")
         return False
+
+
+async def obtener_stock_producto(idProducto: str) -> int:
+    """
+    Devuelve el stock de un producto en la colección 'productos' en MongoDB.
+    """
+    collection = mongo.products
+    try:
+        # Buscar el producto por idProducto
+        producto = collection.find_one(
+            {"idProducto": idProducto}, {"stock": 1, "_id": 0}
+        )
+
+        # Si el producto no existe, lanzar error 404
+        if not producto:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+        # Devolver el stock como entero
+        return producto.get("stock", 0)
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
