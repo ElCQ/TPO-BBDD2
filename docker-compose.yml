@@ -1,0 +1,43 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: .
+    volumes:
+      - ./app:/app
+    restart: always
+    ports:
+      - "8080:80"
+    command: python -m hypercorn main:app --bind 0.0.0.0:80 --reload --debug --access-logfile - --error-logfile -
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=America/Argentina/Buenos_Aires
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:latest
+    container_name: redis_db
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra
+    restart: always
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=TestCluster
+volumes:
+  mongo_data:
+  redis_data:
+    driver: local

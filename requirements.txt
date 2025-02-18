@@ -1,0 +1,16 @@
+fastapi
+gunicorn
+pydantic
+requests
+starlette
+urllib3
+python-multipart
+python-dotenv
+Hypercorn
+uvicorn
+pymongo
+redis
+bcrypt
+neo4j
+pyjwt
+cassandra-driver
