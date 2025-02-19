@@ -155,14 +155,14 @@ async def login(
     return True
 
 
-@usuario.delete("/logout")
-async def logout(user_name):
-    user = get_user(user_name)
-    carrito = redis_client.hget(f"user:{str(user.get("_id"))}", "carrito")
+@usuario.delete("/logout/user_id/{user_id}")
+async def logout(user_id):
+    # user = get_user(user_name)
+    carrito = redis_client.hget(f"user:{str(user_id)}", "carrito")
 
-    user_activity_log(str(user.get("_id")), "LOGOUT", carrito)
+    user_activity_log(str(user_id), "LOGOUT", carrito)
 
-    redis_client.delete(f"user:{str(user.get("_id"))}")
+    redis_client.delete(f"user:{str(user_id)}")
 
     return True
 
