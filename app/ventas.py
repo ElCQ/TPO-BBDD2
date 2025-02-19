@@ -33,14 +33,17 @@ class MetodoPago(BaseModel):
 class CompraUpdate(BaseModel):
     metodo_pago: str
 
+# Métodos de pago válidos
+METODOS_VALIDOS = {"Efectivo", "MP", "Tarjeta"}
+
 # Traer historial de compras
 @ventas.get("/historial/{user_id}")
 def traer_historial_compras(user_id: str):
-    compras = list(mongo.ventas.find({"idUser": user_id}, {"pagoCompletado": True}))
+    compras = list(mongo.ventas.find({"idUser": user_id, "PagoCompleto": True}))
     if not compras:
         raise HTTPException(status_code=404, detail="No se encontraron compras")
     
-    user_activity_log(user_id, "FETCH_PURCHASE_HISTORY", compras)
+    user_activity_log(user_id, "FETCH_PURCHASE_HISTORY", {"total_compras": len(compras)})
     return compras
 
 # Seleccionar método de pago
@@ -61,22 +64,22 @@ def seleccionar_metodo_pago(user_id: str, pago: MetodoPago):
 # Comprar
 @ventas.post("/comprar/{user_id}/{venta_id}")
 def comprar(user_id: str, venta_id: str, compra: CompraUpdate):
+    if compra.metodo_pago not in METODOS_VALIDOS:
+        raise HTTPException(status_code=400, detail="Método de pago inválido")
+    
     venta = mongo.ventas.find_one({"idVenta": venta_id})
     if not venta:
         raise HTTPException(status_code=404, detail="Venta no encontrada")
     
-    # Validar stock
+    # Validar y actualizar stock de forma atómica
     for item in venta["Carrito"]:
-        producto = mongo.productos.find_one({"Nombre": item["producto"]})
-        if not producto or producto["Stock"] < item["cantidad"]:
-            raise HTTPException(status_code=400, detail=f"Stock insuficiente para {item['producto']}")
-    
-    # Descontar stock
-    for item in venta["Carrito"]:
-        mongo.productos.update_one(
-            {"Nombre": item["producto"]},
-            {"$inc": {"Stock": -item["cantidad"]}}
+        producto = mongo.productos.find_one_and_update(
+            {"Nombre": item["producto"], "Stock": {"$gte": item["cantidad"]}},
+            {"$inc": {"Stock": -item["cantidad"]}},
+            return_document=False
         )
+        if not producto:
+            raise HTTPException(status_code=400, detail=f"Stock insuficiente para {item['producto']}")
     
     # Actualizar venta como pagada y guardar método de pago
     mongo.ventas.update_one(
