@@ -66,7 +66,7 @@ def product_activity_log(user_id, product_id, event, producto):
         """
         )
         query = """
-            INSERT INTO user_activity_log (
+            INSERT INTO productos_activity_log (
                 user_id,
                 product_id,
                 event_time,
@@ -76,6 +76,7 @@ def product_activity_log(user_id, product_id, event, producto):
                 %s, 
                 %s, 
                 %s, 
+                %s,
                 %s
             )
         """
@@ -276,4 +277,18 @@ async def obtener_log_productos(
         return {"logs": logs}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def obtener_precio_producto(idProducto: str):
+    collection = mongo.products
+    try:
+        product = collection.find_one(
+            {"_id": ObjectId(idProducto)}, {"price": 1, "_id": 0}
+        )
+        if not product:
+            raise HTTPException(status_code=404, detail="No se encontro producto")
+        return product.get("price", 0)
+    except Exception as e:
+        print(f"Error get one product: {e}")
         raise HTTPException(status_code=500, detail=str(e))

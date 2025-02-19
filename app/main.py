@@ -19,6 +19,7 @@ from jwt.exceptions import InvalidTokenError
 from utilities import mongo, redis_client, cassandra, mongo_client
 from usuarios import usuario
 from productos import productos
+from carrito import carrito
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,6 +28,7 @@ app = FastAPI()
 
 app.include_router(router=usuario)
 app.include_router(router=productos)
+app.include_router(router=carrito)
 
 
 @app.get("/health")

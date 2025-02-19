@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends, status
+from bson import ObjectId
+
 
 load_dotenv()
 
@@ -79,7 +81,7 @@ async def obtener_stock_producto(idProducto: str) -> int:
     try:
         # Buscar el producto por idProducto
         producto = collection.find_one(
-            {"idProducto": idProducto}, {"stock": 1, "_id": 0}
+            {"_id": ObjectId(idProducto)}, {"stock": 1, "_id": 0}
         )
 
         # Si el producto no existe, lanzar error 404
