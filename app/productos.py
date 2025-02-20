@@ -338,8 +338,6 @@ async def obtener_producto(idProducto: str = None):
 
         data = list(collection.find(filtro))
 
-        print(data)
-
         if not data:
             raise HTTPException(status_code=404, detail="No existe producto")
 

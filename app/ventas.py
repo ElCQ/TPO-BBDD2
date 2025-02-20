@@ -104,7 +104,6 @@ async def comprar(user_id: str, venta_id: str, compra: MetodoPago):
         producto = mongo.products.update_one(
             {"_id": ObjectId(item["product_id"])}, {"$inc": {"stock": -item["amount"]}}
         )
-        print(producto)
 
     # Actualizar venta como pagada y guardar método de pago
     mongo.ventas.update_one(
