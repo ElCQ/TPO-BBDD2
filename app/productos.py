@@ -26,8 +26,11 @@ productos = APIRouter(tags=["productos"], prefix="/productos")
 
 
 class PutProducto(BaseModel):
+    name: Optional[str] = Field(default=None)
+    description: Optional[str] = Field(default=None)
     stock: Optional[int] = Field(default=None)
     price: Optional[float] = Field(default=None)
+    image: Optional[str] = Field(None)
 
 
 class Producto(BaseModel):
@@ -99,7 +102,7 @@ async def post_producto(userid, product: Producto):
 
 
 @productos.patch("/id_product/{id_product}")
-async def put_producto(userid, id_product, product: Producto):
+async def put_producto(userid, id_product, product: PutProducto):
     """
     Actualiza un producto apartir del id producto
     """
@@ -107,18 +110,32 @@ async def put_producto(userid, id_product, product: Producto):
 
 
 @productos.get("")
-@productos.get("/id_product/{id_product}")
 async def get_producto(id_product=None):
     """
     Se obtiene uno varios productos
     """
+    return await obtener_producto(id_product)
+
+
+@productos.get("/activity")
+async def get_historial_producto(
+    idProducto: Optional[str] = None,
+    fechaDesde: Optional[str] = None,
+    fechaHasta: Optional[str] = None,
+    userId: Optional[str] = None,
+):
+    """
+    Se obtienen los logs entre una determinada fechas y se puede filtar por producto o por usuario
+    """
+    return await obtener_log_productos(idProducto, fechaDesde, fechaHasta, userId)
 
 
 @productos.delete("/id_product/{id_product}")
-async def delete_producto(id_product):
+async def delete_producto(userid, id_product):
     """
     Se elimina un producto en especifico
     """
+    return await eliminar_producto(userid, id_product)
 
 
 async def agregar_producto(userid, producto: Producto):
@@ -159,7 +176,7 @@ async def actualizar_producto(userid, idProducto: str, producto: Producto):
     collection = mongo.products
     try:
         # Verificar si el producto existe
-        existing_product = collection.find_one({"idProducto": idProducto})
+        existing_product = collection.find_one({"_id": ObjectId(idProducto)})
         if not existing_product:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
 
@@ -167,16 +184,20 @@ async def actualizar_producto(userid, idProducto: str, producto: Producto):
         producto_dict = producto.dict(
             exclude_unset=True
         )  # Excluye valores no modificados
-        producto_dict["date_updated"] = datetime.utcnow()
+
+        existing_product = collection.find_one({"name": producto.name})
+        if existing_product:
+            raise HTTPException(
+                status_code=409, detail="Ya existe un producto con ese nombre"
+            )
 
         # Actualizar el producto en la base de datos
-        collection.update_one({"idProducto": idProducto}, {"$set": producto_dict})
+        collection.update_one({"_id": ObjectId(idProducto)}, {"$set": producto_dict})
 
         # Guardar log de actividad
         product_activity_log(userid, str(idProducto), "UPDATE_PRODUCT", producto_dict)
 
         return {"message": "Producto actualizado con éxito", "idProducto": idProducto}
-
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -190,12 +211,14 @@ async def eliminar_producto(userid, idProducto: str):
     collection = mongo.products
     try:
         # Verificar si el producto existe
-        existing_product = collection.find_one({"idProducto": idProducto})
+        existing_product = collection.find_one({"_id": ObjectId(idProducto)})
         if not existing_product:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
 
         # Eliminar el producto de la base de datos
-        collection.delete_one({"idProducto": idProducto})
+        collection.update_one(
+            {"_id": ObjectId(idProducto)}, {"$set": {"disable_date": datetime.utcnow()}}
+        )
 
         # Guardar log de actividad
         product_activity_log(userid, idProducto, "DELETE_PRODUCT", existing_product)
@@ -220,7 +243,7 @@ async def obtener_log_productos(
     """
 
     try:
-        session = cassandra.connect()
+        session = cassandra.connect("productos")
         # Si no se proporcionan fechas, se establecen desde ayer hasta hoy
         if not fechaDesde or not fechaHasta:
             hoy = datetime.utcnow()
@@ -246,7 +269,13 @@ async def obtener_log_productos(
                 )
 
         # Construcción de la consulta
-        query = "SELECT * FROM productos_activity_log WHERE event_time >= %s AND event_time <= %s"
+        query = """
+            SELECT 
+                * 
+            FROM productos_activity_log 
+            WHERE event_time >= %s 
+            AND event_time <= %s
+        """
         values = [fechaDesde_dt, fechaHasta_dt]
 
         if idProducto:
@@ -257,7 +286,7 @@ async def obtener_log_productos(
             query += " AND user_id = %s"
             values.append(userId)
 
-        query += " ORDER BY event_time DESC"
+        query += " ALLOW FILTERING; "
 
         # Ejecutar la consulta
         rows = session.execute(query, tuple(values))
@@ -292,3 +321,29 @@ def obtener_precio_producto(idProducto: str):
     except Exception as e:
         print(f"Error get one product: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def obtener_producto(idProducto: str = None):
+    """ """
+    collection = mongo.products
+    try:
+        filtro = {}
+        if idProducto:
+            filtro = {"_id": ObjectId(idProducto)}
+
+        data = list(collection.find(filtro))
+
+        print(data)
+
+        if not data:
+            raise HTTPException(status_code=404, detail="No existe producto")
+
+        for producto in data:
+            producto["idProducto"] = str(producto.get("_id"))
+            producto.pop("_id")
+
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{e}")

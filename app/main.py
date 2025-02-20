@@ -20,6 +20,7 @@ from utilities import mongo, redis_client, cassandra, mongo_client
 from usuarios import usuario
 from productos import productos
 from carrito import carrito
+from ventas import ventas
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,6 +30,7 @@ app = FastAPI()
 app.include_router(router=usuario)
 app.include_router(router=productos)
 app.include_router(router=carrito)
+app.include_router(router=ventas)
 
 
 @app.get("/health")

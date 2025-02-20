@@ -81,7 +81,7 @@ async def obtener_stock_producto(idProducto: str) -> int:
     try:
         # Buscar el producto por idProducto
         producto = collection.find_one(
-            {"_id": ObjectId(idProducto)}, {"stock": 1, "_id": 0}
+            {"_id": ObjectId(idProducto), "disable_date": None}, {"stock": 1, "_id": 0}
         )
 
         # Si el producto no existe, lanzar error 404

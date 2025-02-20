@@ -37,7 +37,7 @@ class Pedido(BaseModel):
     Fecha: Optional[datetime] = Field(default=datetime.today())
     Carrito: List[Carrito]
     TotalDeVenta: float
-    FormaDePago: str = None
+    MetodoPago: str = None
     PagoCompleto: bool = False
 
 
@@ -117,6 +117,9 @@ async def confirmar_carrito(user_id):
     if not carrito:
         raise HTTPException(status_code=400, detail="No hay carrito cargado")
 
+    if verificar_otro_pedido(user_id):
+        raise HTTPException(status_code=400, detail="Ya existe un pedido pendiente")
+
     total_venta = 0
     for producto in carrito:
         stock = await obtener_stock_producto(producto.get("product_id"))
@@ -134,13 +137,19 @@ async def confirmar_carrito(user_id):
 
     user_activity_log(user_id, "ORDER_CREATED", carrito)
 
-    redis_client.hset(f"user:{str(user_id)}", "carrito", str([]))
-
     return {
         "idVenta": id_venta,
         "Fecha": pedido.Fecha,
         "TotalDeVenta": pedido.TotalDeVenta,
     }
+
+
+@carrito.delete("/pedido/user_id/{user_id}")
+async def delete_pedido(user_id):
+    """
+    Elimina el pedido pendiente que tenga el usuario
+    """
+    return eliminar_pedido(user_id)
 
 
 def crear_venta(pedido):
@@ -150,6 +159,45 @@ def crear_venta(pedido):
         if not post_id:
             raise HTTPException(status_code=400, detail="Error al crear venta")
         return str(post_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error al cargar venta: {e}")
+        raise HTTPException(status_code=500, detail=f"{e}")
+
+
+def verificar_otro_pedido(user_id):
+    collection = mongo.ventas
+    try:
+        data = collection.find_one({"idUser": user_id, "PagoCompleto": False})
+        if data:
+            return True
+        else:
+            return False
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error al cargar venta: {e}")
+        raise HTTPException(status_code=500, detail=f"{e}")
+
+
+def eliminar_pedido(user_id):
+    collection = mongo.ventas
+    try:
+        if not verificar_otro_pedido(user_id):
+            raise HTTPException(
+                status_code=400, detail="No hay ningun pedido pendiente"
+            )
+
+        venta = collection.find_one({"idUser": user_id, "PagoCompleto": False})
+        venta["idVenta"] = str(venta.get("_id"))
+        venta.pop("_id")
+        collection.delete_one({"idUser": user_id, "PagoCompleto": False})
+
+        user_activity_log(user_id, "ORDER_DELETED", str(venta.get("Carrito")))
+
+        return {"message": "Pedido eliminado con éxito", "venta": venta}
+
     except HTTPException as e:
         raise e
     except Exception as e:
