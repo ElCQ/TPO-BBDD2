@@ -9,13 +9,10 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from os import environ
-from neo4j import GraphDatabase
 import redis
 import json
-import jwt
 from cassandra.cluster import Cluster
 import uuid
-from jwt.exceptions import InvalidTokenError
 from utilities import (
     mongo,
     redis_client,
@@ -23,6 +20,7 @@ from utilities import (
     mongo_client,
     user_activity_log,
     obtener_stock_producto,
+    chek_user_id
 )
 from dotenv import load_dotenv
 
@@ -45,6 +43,8 @@ METODOS_VALIDOS = {"Efectivo", "MP", "Tarjeta"}
 # Traer historial de compras
 @ventas.get("/historial/{user_id}")
 async def traer_historial_compras(user_id: str):
+    user = chek_user_id(user_id)
+
     compras = list(mongo.ventas.find({"idUser": user_id, "PagoCompleto": True}))
     if not compras:
         raise HTTPException(status_code=404, detail="No se encontraron compras")
@@ -52,6 +52,11 @@ async def traer_historial_compras(user_id: str):
     user_activity_log(
         user_id, "FETCH_PURCHASE_HISTORY", {"total_compras": len(compras)}
     )
+
+    for compra in compras:
+        compra["idVenta"] = str(compra.get("_id"))
+        compra.pop("_id")
+
     return compras
 
 
@@ -75,6 +80,8 @@ def seleccionar_metodo_pago(user_id: str, pago: MetodoPago):
 # Comprar
 @ventas.post("/comprar/{user_id}/{venta_id}")
 async def comprar(user_id: str, venta_id: str, compra: MetodoPago):
+    user = chek_user_id(user_id)
+
     if compra.metodo not in METODOS_VALIDOS:
         raise HTTPException(status_code=400, detail="Método de pago inválido")
 
@@ -106,11 +113,12 @@ async def comprar(user_id: str, venta_id: str, compra: MetodoPago):
     )
 
     # Recalcular categorización del usuario
-    total_compras = mongo.ventas.count_documents(
+    total_compras = mongo.ventas.find(
         {"idUser": user_id, "PagoCompleto": True}
     )
+    total_productos = sum(sum(item["amount"] for item in venta["Carrito"]) for venta in total_compras)
     categoria = (
-        "LOW" if total_compras <= 10 else "MEDIUM" if total_compras < 20 else "TOP"
+        "LOW" if total_productos <= 10 else "MEDIUM" if total_productos < 20 else "TOP"
     )
     mongo.users.update_one(
         {"_id": ObjectId(user_id)}, {"$set": {"Categorización": categoria}}

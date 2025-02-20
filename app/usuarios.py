@@ -9,14 +9,11 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from os import environ
-from neo4j import GraphDatabase
 import redis
 import json
-import jwt
 from cassandra.cluster import Cluster
 import uuid
-from jwt.exceptions import InvalidTokenError
-from utilities import mongo, redis_client, cassandra, mongo_client, user_activity_log
+from utilities import mongo, redis_client, cassandra, mongo_client, user_activity_log, chek_user_id
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -80,6 +77,8 @@ def authenticate_user(username: str, password: str) -> User:
             )
 
         return User(**data), str(data.get("_id"))
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -129,7 +128,11 @@ async def post_new_user(user: UserInDb):
             mapping={"user": user.user_name, "id_user": str(post_id), "carrito": "[]"},
         )
 
-        return True
+        rsp = collection.find_one({"_id": post_id})
+        rsp["idUser"] = str(rsp.get("_id"))
+        rsp.pop("_id")
+
+        return rsp
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -151,14 +154,20 @@ async def login(
         f"user:{id}",
         mapping={"user": form_data.username, "id_user": id, "carrito": str(carrito)},
     )
+    user_dict = user.dict()
+    user_dict["idUser"] = id
 
-    return True
+    return user_dict
 
 
 @usuario.delete("/logout/user_id/{user_id}")
 async def logout(user_id):
-    # user = get_user(user_name)
+    user = chek_user_id(user_id)
+    
     carrito = redis_client.hget(f"user:{str(user_id)}", "carrito")
+
+    if not carrito:
+        raise HTTPException(status_code=400,detail="usuario no logeado")
 
     user_activity_log(str(user_id), "LOGOUT", carrito)
 
@@ -173,3 +182,11 @@ async def get_tarjetas(user_id=None):
     Se devuelven todas las tarjetas asociadas al usuario.
     Devuelve error en caso que no tenga ninguna tarjeta asociada
     """
+    user = chek_user_id(user_id)
+
+    tarjetas = mongo.users.find_one({"_id":ObjectId(user_id)},{"TarjetasGuardadas":1,"_id":0})
+
+    if not tarjetas:
+        raise HTTPException(status_code=404,detail="No hay tarjetas guardadas")
+
+    return tarjetas

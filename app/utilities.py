@@ -1,6 +1,5 @@
 from pymongo import MongoClient
 from os import environ
-from neo4j import GraphDatabase
 import redis
 from cassandra.cluster import Cluster
 import uuid
@@ -95,3 +94,15 @@ async def obtener_stock_producto(idProducto: str) -> int:
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def chek_user_id(user_id):
+    user = mongo.users.find_one({"_id":ObjectId(user_id)})
+    if not user:
+        HTTPException(status_code=404,detail="Usuario inexistente")
+
+    session = redis_client.hget(f"user:{str(user_id)}","user")
+
+    if not session:
+        raise HTTPException(status_code=404,detail="Usuario no logeado")
+
+    return user

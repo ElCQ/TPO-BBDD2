@@ -19,6 +19,7 @@ from utilities import (
     mongo_client,
     user_activity_log,
     obtener_stock_producto,
+    chek_user_id,
 )
 from dotenv import load_dotenv
 
@@ -32,13 +33,30 @@ class Carrito(BaseModel):
     amount: int
 
 
+class CaritoDef(Carrito):
+    discount: int
+
+
 class Pedido(BaseModel):
     idUser: str
     Fecha: Optional[datetime] = Field(default=datetime.today())
-    Carrito: List[Carrito]
+    Carrito: List[CaritoDef]
     TotalDeVenta: float
+    IVA: int = 21
     MetodoPago: str = None
     PagoCompleto: bool = False
+
+
+@carrito.get("/user_id/{user_id}")
+async def obtener_carrito(user_id):
+    """
+    Se obtiene el carrito actual
+    """
+    user = chek_user_id(user_id)
+
+    carrito = eval(redis_client.hget(f"user:{str(user_id)}", "carrito"))
+
+    return carrito
 
 
 @carrito.post("/agregar/user_id/{user_id}")
@@ -46,6 +64,8 @@ async def agregar_carrito(user_id, carrito: Carrito):
     """
     agrega producto al carrito activo
     """
+    user = chek_user_id(user_id)
+
     carrito_viejo = eval(redis_client.hget(f"user:{str(user_id)}", "carrito"))
     carrito_nuevo = copy.deepcopy(carrito_viejo)
     stock = await obtener_stock_producto(carrito.product_id)
@@ -80,6 +100,8 @@ async def borar_carrito(user_id, carrito: Carrito):
     o
     n cantidad sin superar lo que esta en el carrito
     """
+    user = chek_user_id(user_id)
+
     carrito_viejo = eval(redis_client.hget(f"user:{str(user_id)}", "carrito"))
     carrito_nuevo = copy.deepcopy(carrito_viejo)
 
@@ -112,6 +134,8 @@ async def borar_carrito(user_id, carrito: Carrito):
 @carrito.post("/confirmar/user_id/{user_id}")
 async def confirmar_carrito(user_id):
     """ """
+    user = chek_user_id(user_id)
+
     carrito = eval(redis_client.hget(f"user:{str(user_id)}", "carrito"))
 
     if not carrito:
@@ -120,7 +144,7 @@ async def confirmar_carrito(user_id):
     if verificar_otro_pedido(user_id):
         raise HTTPException(status_code=400, detail="Ya existe un pedido pendiente")
 
-    total_venta = 0
+    sub_total_venta = 0
     for producto in carrito:
         stock = await obtener_stock_producto(producto.get("product_id"))
         if stock < producto.get("amount"):
@@ -128,8 +152,16 @@ async def confirmar_carrito(user_id):
                 status_code=400,
                 detail=f"No hay stock suficiente para el producto {producto.get("product_id")}",
             )
-        price = obtener_precio_producto(producto.get("product_id"))
-        total_venta += price * producto.get("amount")
+        price, descuento = obtener_precio_producto(producto.get("product_id"))
+        subtotal = price * producto.get("amount")
+        descuento_coma = descuento / 100
+        descuento_aplicado = subtotal * descuento_coma
+        subtotal_con_descuento = subtotal - descuento_aplicado
+        sub_total_venta += subtotal_con_descuento
+
+        producto["discount"] = descuento
+
+    total_venta = sub_total_venta + (sub_total_venta * 0.21)
 
     pedido = Pedido(idUser=user_id, Carrito=carrito, TotalDeVenta=total_venta)
 
@@ -144,11 +176,31 @@ async def confirmar_carrito(user_id):
     }
 
 
+@carrito.get("/pedido/user_id/{user_id}")
+async def get_pedido(user_id):
+    """
+    Se obtiene el pedido del carrito confirmado
+    """
+    user = chek_user_id(user_id)
+
+    if not verificar_otro_pedido(user_id):
+        raise HTTPException(status_code=404, detail="No existe pedido pendiente")
+
+    data = mongo.ventas.find_one({"idUser": user_id, "PagoCompleto": False})
+
+    data["idVenta"] = str(data.get("_id"))
+    data.pop("_id")
+
+    return data
+
+
 @carrito.delete("/pedido/user_id/{user_id}")
 async def delete_pedido(user_id):
     """
     Elimina el pedido pendiente que tenga el usuario
     """
+    user = chek_user_id(user_id)
+
     return eliminar_pedido(user_id)
 
 

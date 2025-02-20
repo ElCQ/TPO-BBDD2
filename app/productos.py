@@ -9,14 +9,11 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from os import environ
-from neo4j import GraphDatabase
 import redis
 import json
-import jwt
 from cassandra.cluster import Cluster
 import uuid
-from jwt.exceptions import InvalidTokenError
-from utilities import mongo, redis_client, cassandra, mongo_client, user_activity_log
+from utilities import mongo, redis_client, cassandra, mongo_client, user_activity_log, chek_user_id
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,6 +27,7 @@ class PutProducto(BaseModel):
     description: Optional[str] = Field(default=None)
     stock: Optional[int] = Field(default=None)
     price: Optional[float] = Field(default=None)
+    descuento: Optional[int] = Field(default=None)
     image: Optional[str] = Field(None)
 
 
@@ -38,6 +36,7 @@ class Producto(BaseModel):
     description: Optional[str] = Field(default=None)
     price: float
     stock: Optional[int] = Field(default=0)
+    descuento: Optional[int] = Field(default=None)
     image: Optional[str] = Field(None)
 
 
@@ -50,8 +49,8 @@ def product_activity_log(user_id, product_id, event, producto):
         keyspace_query = """
             CREATE KEYSPACE IF NOT EXISTS productos
             WITH replication = {
-              'class': 'SimpleStrategy',
-              'replication_factor': '1'
+                'class': 'SimpleStrategy',
+                'replication_factor': '1'
             };
         """
         session.execute(keyspace_query)
@@ -98,6 +97,8 @@ async def post_producto(userid, product: Producto):
     """
     Se inserta un nuevo producto a la base
     """
+    user = chek_user_id(userid)
+
     return await agregar_producto(userid, product)
 
 
@@ -106,6 +107,8 @@ async def put_producto(userid, id_product, product: PutProducto):
     """
     Actualiza un producto apartir del id producto
     """
+    user = chek_user_id(userid)
+
     return await actualizar_producto(userid, id_product, product)
 
 
@@ -135,6 +138,8 @@ async def delete_producto(userid, id_product):
     """
     Se elimina un producto en especifico
     """
+    user = chek_user_id(userid)
+
     return await eliminar_producto(userid, id_product)
 
 
@@ -313,11 +318,11 @@ def obtener_precio_producto(idProducto: str):
     collection = mongo.products
     try:
         product = collection.find_one(
-            {"_id": ObjectId(idProducto)}, {"price": 1, "_id": 0}
+            {"_id": ObjectId(idProducto)}, {"price": 1,"descuento":1, "_id": 0}
         )
         if not product:
             raise HTTPException(status_code=404, detail="No se encontro producto")
-        return product.get("price", 0)
+        return product.get("price", 0),product.get("descuento", 0)
     except Exception as e:
         print(f"Error get one product: {e}")
         raise HTTPException(status_code=500, detail=str(e))
