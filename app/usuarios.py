@@ -114,7 +114,7 @@ async def post_new_user(user: UserInDb):
         user_dict = user.dict()
         user_dict["date"] = datetime.today()
         user_dict["active"] = True
-        user_dict["categorization"] = "LOW"
+        user_dict["Categorizacion"] = "LOW"
         data = collection.find_one({"user_name": user.user_name})
         if data:
             raise HTTPException(status_code=409, detail="username ya existente")
