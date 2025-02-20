@@ -145,6 +145,9 @@ async def login(
 ):
     user, id = authenticate_user(form_data.username, form_data.password)
 
+    if chek_user_id(id):
+        raise HTTPException(status_code=400,detail="Usuario ya logeado")
+
     carrito = eval(obtener_ultimo_carrito(id))
     if not carrito:
         carrito = []
