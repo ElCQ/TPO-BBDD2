@@ -13,7 +13,14 @@ import redis
 import json
 from cassandra.cluster import Cluster
 import uuid
-from utilities import mongo, redis_client, cassandra, mongo_client, user_activity_log, chek_user_id
+from utilities import (
+    mongo,
+    redis_client,
+    cassandra,
+    mongo_client,
+    user_activity_log,
+    chek_user_id,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -145,8 +152,10 @@ async def login(
 ):
     user, id = authenticate_user(form_data.username, form_data.password)
 
-    if chek_user_id(id):
-        raise HTTPException(status_code=400,detail="Usuario ya logeado")
+    data = redis_client.hget(f"user:{str(id)}", "user")
+
+    if data:
+        raise HTTPException(status_code=400, detail="Usuario ya logeado")
 
     carrito = eval(obtener_ultimo_carrito(id))
     if not carrito:
@@ -166,11 +175,11 @@ async def login(
 @usuario.delete("/logout/user_id/{user_id}")
 async def logout(user_id):
     user = chek_user_id(user_id)
-    
+
     carrito = redis_client.hget(f"user:{str(user_id)}", "carrito")
 
     if not carrito:
-        raise HTTPException(status_code=400,detail="usuario no logeado")
+        raise HTTPException(status_code=400, detail="usuario no logeado")
 
     user_activity_log(str(user_id), "LOGOUT", carrito)
 
@@ -187,9 +196,11 @@ async def get_tarjetas(user_id=None):
     """
     user = chek_user_id(user_id)
 
-    tarjetas = mongo.users.find_one({"_id":ObjectId(user_id)},{"TarjetasGuardadas":1,"_id":0})
+    tarjetas = mongo.users.find_one(
+        {"_id": ObjectId(user_id)}, {"TarjetasGuardadas": 1, "_id": 0}
+    )
 
     if not tarjetas:
-        raise HTTPException(status_code=404,detail="No hay tarjetas guardadas")
+        raise HTTPException(status_code=404, detail="No hay tarjetas guardadas")
 
     return tarjetas
